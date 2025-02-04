@@ -1,0 +1,63 @@
+@import "bootstrap/dist/css/bootstrap.min.css";
+
+/* Global Styles */
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: #f8f9fa;
+}
+
+/* Navbar Styles */
+.mobile-navbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--bs-body-bg);
+  border-top: 1px solid var(--bs-border-color);
+  z-index: 1000;
+}
+
+.navbar-container {
+  max-width: 576px;
+  padding: 0.5rem 1rem;
+}
+
+.nav-buttons {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.nav-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  background: none;
+  border: none;
+  color: var(--bs-secondary);
+  font-size: 14px;
+  transition: color 0.2s ease-in-out, background-color 0.2s ease-in-out;
+}
+
+.nav-button:hover {
+  color: var(--bs-primary);
+}
+
+.nav-button.active {
+  color: var(--bs-primary);
+  background-color: rgba(13, 110, 253, 0.1);
+  border-radius: 6px;
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.nav-label {
+  font-size: 12px;
+  font-weight: 500;
+}

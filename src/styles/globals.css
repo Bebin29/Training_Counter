@@ -1,0 +1,73 @@
+/* Load Bootstrap */
+@import "bootstrap/dist/css/bootstrap.min.css";
+
+/* Define Custom CSS Variables */
+:root {
+  --background: #ffffff;
+  --foreground: #212529;
+  --primary: #0d6efd;
+  --secondary: #6c757d;
+  --border: #dee2e6;
+  --radius: 0.5rem;
+}
+
+/* Dark Mode */
+.dark {
+  --background: #212529;
+  --foreground: #f8f9fa;
+  --primary: #0d6efd;
+  --secondary: #6c757d;
+  --border: #495057;
+}
+
+/* Apply Global Styles */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+}
+
+/* Buttons (Bootstrap Override) */
+button {
+  padding: 10px 20px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  border: none;
+}
+
+button.primary {
+  background-color: var(--primary);
+  color: white;
+}
+
+button.secondary {
+  background-color: var(--secondary);
+  color: white;
+}
+
+/* Container */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+/* Utility Classes */
+.text-primary {
+  color: var(--primary);
+}
+
+.bg-primary {
+  background-color: var(--primary);
+  color: white;
+}
+
+.bg-secondary {
+  background-color: var(--secondary);
+  color: white;
+}
+
+.border {
+  border: 1px solid var(--border);
+}
