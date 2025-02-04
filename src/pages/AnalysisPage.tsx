@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardBody, CardTitle, ProgressBar, Spinner, Container, Row, Col, Alert } from "react-bootstrap";
 import { ArrowUpCircleFill, ArrowDownCircleFill } from "react-bootstrap-icons";
 import { format, subDays } from "date-fns";
 import { useSupabase } from "../contexts/SupabaseContext";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 
-// Verbesserte Typisierung
 type Exercise = "pushups" | "situps" | "squats";
 
 interface DailyProgress {
@@ -36,7 +35,6 @@ const EXERCISE_COLORS: Record<Exercise, string> = {
 export function AnalysisPage() {
   const { supabase } = useSupabase();
   const [weeklyData, setWeeklyData] = useState<DailyProgress[]>([]);
-  const [prevWeeklyData, setPrevWeeklyData] = useState<DailyProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<Record<Exercise, ExerciseStats>>({
@@ -45,8 +43,7 @@ export function AnalysisPage() {
     squats: { current: 0, previous: 0, trend: 0 },
   });
 
-  // Verbesserte Datenabruf-Funktion mit Error-Handling
-  const fetchProgress = async (startDate: string, endDate: string): Promise<DailyProgress[]> => {
+  const fetchProgress = useCallback(async (startDate: string, endDate: string): Promise<DailyProgress[]> => {
     try {
       const { data, error: supabaseError } = await supabase
         .from("exercise_progress")
@@ -57,14 +54,14 @@ export function AnalysisPage() {
 
       if (supabaseError) throw new Error(supabaseError.message);
 
-      return processExerciseData(data);
+      return processExerciseData(data || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ein unerwarteter Fehler ist aufgetreten");
+      const errorMessage = err instanceof Error ? err.message : "Ein unerwarteter Fehler ist aufgetreten";
+      setError(errorMessage);
       return [];
     }
-  };
+  }, [supabase]);
 
-  // Verbesserte Datenverarbeitung
   const processExerciseData = (data: any[]): DailyProgress[] => {
     const groupedData: Record<string, DailyProgress> = {};
     
@@ -89,19 +86,18 @@ export function AnalysisPage() {
     return Object.values(groupedData);
   };
 
-  // Berechnung der Statistiken
-  const calculateStats = (currentData: DailyProgress[], previousData: DailyProgress[]) => {
+  const calculateStats = useCallback((currentData: DailyProgress[], previousData: DailyProgress[]) => {
     const exercises: Exercise[] = ["pushups", "situps", "squats"];
     
     const newStats: Record<Exercise, ExerciseStats> = {} as Record<Exercise, ExerciseStats>;
     
     exercises.forEach((exercise) => {
       const currentAvg = Math.round(
-        currentData.reduce((acc, day) => acc + day[exercise], 0) / currentData.length
+        currentData.reduce((acc, day) => acc + day[exercise], 0) / Math.max(currentData.length, 1)
       );
       
       const previousAvg = Math.round(
-        previousData.reduce((acc, day) => acc + day[exercise], 0) / previousData.length
+        previousData.reduce((acc, day) => acc + day[exercise], 0) / Math.max(previousData.length, 1)
       );
       
       const trend = previousAvg ? ((currentAvg - previousAvg) / previousAvg) * 100 : 0;
@@ -114,28 +110,32 @@ export function AnalysisPage() {
     });
 
     setStats(newStats);
-  };
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      const endDate = new Date().toISOString().split("T")[0];
-      const startDateCurrent = subDays(new Date(), 6).toISOString().split("T")[0];
-      const startDatePrevious = subDays(new Date(), 13).toISOString().split("T")[0];
+      try {
+        const endDate = new Date().toISOString().split("T")[0];
+        const startDateCurrent = subDays(new Date(), 6).toISOString().split("T")[0];
+        const startDatePrevious = subDays(new Date(), 13).toISOString().split("T")[0];
 
-      const [currentWeekData, previousWeekData] = await Promise.all([
-        fetchProgress(startDateCurrent, endDate),
-        fetchProgress(startDatePrevious, startDateCurrent),
-      ]);
+        const [currentWeekData, previousWeekData] = await Promise.all([
+          fetchProgress(startDateCurrent, endDate),
+          fetchProgress(startDatePrevious, startDateCurrent),
+        ]);
 
-      setWeeklyData(currentWeekData);
-      setPrevWeeklyData(previousWeekData);
-      calculateStats(currentWeekData, previousWeekData);
-      setLoading(false);
+        setWeeklyData(currentWeekData);
+        calculateStats(currentWeekData, previousWeekData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load data");
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadData();
-  }, [supabase]);
+  }, [fetchProgress, calculateStats]);
 
   const TrendIndicator = ({ trend }: { trend: number }) => {
     if (trend > 0) {
@@ -177,7 +177,6 @@ export function AnalysisPage() {
         </Col>
       </Row>
 
-      {/* Tägliche Übersicht */}
       {weeklyData.map((day) => (
         <Card key={day.date} className="mb-3">
           <CardBody>
@@ -198,7 +197,6 @@ export function AnalysisPage() {
         </Card>
       ))}
 
-      {/* Statistik-Karten */}
       <Row className="mb-4">
         {(Object.keys(DAILY_GOALS) as Exercise[]).map((exercise) => (
           <Col key={exercise} md={4}>
@@ -216,7 +214,6 @@ export function AnalysisPage() {
         ))}
       </Row>
 
-      {/* Fortschritts-Chart */}
       <Card className="mb-4">
         <CardBody>
           <CardTitle>Wöchentlicher Verlauf</CardTitle>

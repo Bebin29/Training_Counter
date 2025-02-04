@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, Button, ProgressBar, Alert, Spinner, Badge } from "react-bootstrap";
 import { House, Activity, Trophy } from "react-bootstrap-icons";
 import { useSupabase } from "../contexts/SupabaseContext";
-import { Exercise, DailyProgress } from "../types";
+import { Exercise } from "../types";
 
 interface HomePageProps {
   onNavigate: (page: string) => void;
