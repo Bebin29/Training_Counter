@@ -1,49 +1,60 @@
+// App.tsx
 import { useState } from 'react';
 import { Layout } from './components/layout/Layout';
 import { HomePage } from './pages/HomePage';
 import { ExercisePage } from './pages/ExercisePage';
-import { RunningPage } from './pages/RunningPage';
 import { AnalysisPage } from './pages/AnalysisPage';
-import { ExerciseProvider } from './contexts/ExerciseContext'; // ✅ Import ExerciseProvider
+import { ExerciseProvider } from './contexts/ExerciseContext';
+import { Exercise } from './types';  // Import from existing types file
+
+export interface NavigationProps {
+  onNavigate: (page: string) => void;
+}
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<string>('home');
-  const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
   const handleNavigate = (page: string) => {
     setCurrentPage(page);
-    if (!['home', 'running', 'analysis'].includes(page)) {
-      setSelectedExercise(page);
+    
+    if (['pushups', 'situps', 'squats'].includes(page)) {
+      setSelectedExercise(page as Exercise);
+    } else {
+      setSelectedExercise(null);
     }
   };
 
-  const renderPage = () => {
-    switch (currentPage) {
+  const PageRenderer = ({ page }: { page: string }) => {
+    switch (page) {
       case 'home':
         return <HomePage onNavigate={handleNavigate} />;
-      case 'running':
-        return <RunningPage onNavigate={handleNavigate} />;
       case 'analysis':
         return <AnalysisPage />;
+      case 'pushups':
+      case 'situps':
+      case 'squats':
+        if (page as Exercise) {
+          return (
+            <ExercisePage 
+              exercise={page as Exercise}
+              onNavigate={handleNavigate}
+            />
+          );
+        }
+        return <HomePage onNavigate={handleNavigate} />;
       default:
-        return selectedExercise ? (
-          <ExercisePage 
-            exercise={selectedExercise} 
-            onNavigate={handleNavigate} 
-          />
-        ) : (
-          <HomePage onNavigate={handleNavigate} />
-        );
+        return <HomePage onNavigate={handleNavigate} />;
     }
   };
 
   return (
-    <ExerciseProvider> {/* ✅ Wrap the entire app in ExerciseProvider */}
+    <ExerciseProvider>
       <div className="app-container">
         <div className="app-wrapper">
           <Layout currentPage={currentPage} onNavigate={handleNavigate}>
             <main className="main-content">
-              {renderPage()}
+              <PageRenderer page={currentPage} />
             </main>
           </Layout>
         </div>

@@ -1,258 +1,200 @@
-import { useEffect, useState } from "react";
-import { Card, Button, ProgressBar } from "react-bootstrap";
-import { ArrowLeft } from "react-bootstrap-icons";
+import { useEffect, useState, useCallback } from "react";
+import { Card, Button, ProgressBar, Alert, Spinner } from "react-bootstrap";
+import { ArrowLeft, Trophy, ArrowUp, ArrowDown } from "react-bootstrap-icons";
 import { useSupabase } from "../contexts/SupabaseContext";
-import { format } from "path";
+import { Exercise } from "../types";
 
 interface ExercisePageProps {
-  exercise: string;
+  exercise: Exercise;
   onNavigate: (page: string) => void;
 }
 
-type Exercise = "pushups" | "situps" | "squats" | "running";
+const DAILY_GOALS: Record<Exercise, number> = {
+  pushups: 100,
+  situps: 100,
+  squats: 100,
+};
+
+const EXERCISE_EMOJI: Record<Exercise, string> = {
+  pushups: "💪",
+  situps: "🔄",
+  squats: "🏃",
+};
+
+const SET_SIZES = [1, 5, 10, 25];
 
 export function ExercisePage({ exercise, onNavigate }: ExercisePageProps) {
   const { supabase } = useSupabase();
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exerciseId, setExerciseId] = useState<number | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
 
-  const DAILY_GOALS: Record<string, number> = {
-    pushups: 100,
-    situps: 100,
-    squats: 100,
-  };
-
-  useEffect(() => {
-    async function fetchExerciseCount() {
+  const fetchExerciseCount = useCallback(async () => {
+    try {
       setLoading(true);
       setError(null);
-  
+
       const today = new Date().toISOString().split("T")[0];
-  
-      console.log(`Fetching total count for: ${exercise} on ${today}`);
-  
-      const { data, error } = await supabase
-        .from("exercise_progress")
-        .select("id, count")
-        .eq("exercise", exercise)
-        .eq("date", today)
-        .limit(1) // ✅ Only fetch the latest entry
-        .single();
-  
-      if (error && error.code !== "PGRST116") {
-        console.error("Error fetching count:", error);
-        setError("Failed to load exercise count.");
-      } else if (!data) {
-        console.warn("No data found for today, initializing with zero.");
-        setCount(0);
-        setExerciseId(null);
-      } else {
-        console.log(`✅ Fetched total count for ${exercise}:`, data.count);
-        setCount(data.count);
-        setExerciseId(data.id);
-      }
-  
-      setLoading(false);
-    }
-  
-    fetchExerciseCount();
-  }, [supabase, exercise]);
-
-  const updateExerciseCount = async (exercise: Exercise, newCount: number) => {
-    const today = new Date().toISOString().split("T")[0]; // Format YYYY-MM-DD
-  
-    console.log(`Updating ${exercise} count on ${today} to ${newCount}`);
-  
-    try {
-      // Check if entry exists for today
-      const { data: existingEntry, error: fetchError } = await supabase
-        .from("exercise_progress")
-        .select("id, count")
-        .eq("exercise", exercise)
-        .eq("date", today)
-        .single();
-  
-      if (fetchError && fetchError.code !== "PGRST116") {
-        console.error("Error fetching existing entry:", fetchError);
-        return;
-      }
-  
-      if (existingEntry) {
-        // If an entry exists, update it
-        const { error: updateError } = await supabase
-          .from("exercise_progress")
-          .update({ count: newCount })
-          .eq("id", existingEntry.id);
-  
-        if (updateError) {
-          console.error("Error updating count:", updateError);
-        } else {
-          console.log(`Updated ${exercise} count to ${newCount}`);
-        }
-      } else {
-        // If no entry exists, insert a new row
-        const { error: insertError } = await supabase
-          .from("exercise_progress")
-          .insert([{ exercise, count: newCount, date: today }]);
-  
-        if (insertError) {
-          console.error("Error inserting new entry:", insertError);
-        } else {
-          console.log(`Inserted new entry for ${exercise} with count ${newCount}`);
-        }
-      }
-    } catch (error) {
-      console.error("Unexpected error updating database:", error);
-    }
-  };  
-  
-  
-
-  async function handleCountChange(amount: number) {
-    if (loading) return;
-  
-    const newCount = Math.max(0, count + amount); // Prevent negative values
-    setCount(newCount); // Update UI immediately
-  
-    console.log(`Updating ${exercise} count to ${newCount} for today.`);
-  
-    try {
-      const today = new Date().toISOString().split("T")[0]; // Format YYYY-MM-DD
-  
-      // ✅ Fetch ALL existing rows for this exercise on this date
-      const { data: existingEntries, error: fetchError } = await supabase
+      const { data, error: fetchError } = await supabase
         .from("exercise_progress")
         .select("id, count")
         .eq("exercise", exercise)
         .eq("date", today);
-  
-      if (fetchError) {
-        console.error("Error fetching existing entries:", fetchError);
-        setError("Failed to load progress.");
+
+      if (fetchError) throw new Error(fetchError.message);
+
+      if (!data || data.length === 0) {
+        setCount(0);
+        setExerciseId(null);
         return;
       }
-  
-      if (existingEntries.length > 1) {
-        console.warn("⚠️ Multiple entries found for today. Merging them...");
-  
-        // ✅ Sum all counts to get the correct total
-        const mergedCount = existingEntries.reduce((sum, entry) => sum + entry.count, 0);
-  
-        // ✅ Keep only one row, delete the rest
-        const primaryId = existingEntries[0].id;
-        const idsToDelete = existingEntries.slice(1).map(entry => entry.id);
-  
-        await supabase
-          .from("exercise_progress")
-          .delete()
-          .in("id", idsToDelete);
-  
-        console.log(`✅ Merged duplicate rows. Kept ID ${primaryId}, deleted others.`);
-  
-        // ✅ Now update the remaining row
-        await supabase
+
+      const totalCount = data.reduce((sum, entry) => sum + Number(entry.count), 0);
+      setCount(totalCount);
+      setExerciseId(data[0].id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load exercise count");
+      console.error("Error fetching count:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabase, exercise]);
+
+  useEffect(() => {
+    fetchExerciseCount();
+  }, [fetchExerciseCount]);
+
+  const handleCountChange = async (amount: number) => {
+    if (loading || saving) return;
+
+    const newCount = Math.max(0, Math.min(count + amount, DAILY_GOALS[exercise]));
+    if (newCount === count) return;
+
+    try {
+      setSaving(true);
+      setError(null);
+      const today = new Date().toISOString().split("T")[0];
+
+      if (exerciseId) {
+        const { error: updateError } = await supabase
           .from("exercise_progress")
           .update({ count: newCount })
-          .eq("id", primaryId);
-  
-        console.log(`✅ Updated ${exercise} count to ${newCount}`);
-      } else if (existingEntries.length === 1) {
-        // ✅ Update the only row that exists
-        await supabase
-          .from("exercise_progress")
-          .update({ count: newCount })
-          .eq("id", existingEntries[0].id);
-  
-        console.log(`✅ Updated ${exercise} count to ${newCount}`);
+          .eq("id", exerciseId);
+
+        if (updateError) throw new Error(updateError.message);
       } else {
-        // ✅ No row exists, insert a new one
-        await supabase
+        const { error: insertError } = await supabase
           .from("exercise_progress")
           .insert([{ exercise, count: newCount, date: today }]);
-  
-        console.log(`✅ Inserted new entry for ${exercise} with count ${newCount}`);
-      }
-    } catch (error) {
-      console.error("Unexpected error updating database:", error);
-      setError("Failed to save progress.");
-    }
-  }
-  
-  
-    
-  
 
-  const goal = DAILY_GOALS[exercise] || 100;
+        if (insertError) throw new Error(insertError.message);
+      }
+
+      setCount(newCount);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
+      await fetchExerciseCount(); // Refresh data to get new ID if needed
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save progress");
+      console.error("Error updating count:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const goal = DAILY_GOALS[exercise];
   const progressPercentage = (count / goal) * 100;
+  const isGoalAchieved = count >= goal;
+
+  if (loading) {
+    return (
+      <div className="container d-flex justify-content-center align-items-center" style={{ minHeight: '50vh' }}>
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </Spinner>
+      </div>
+    );
+  }
 
   return (
     <div className="container mt-4">
-      <Card className="p-4 shadow-sm">
-        <Card.Header className="d-flex justify-content-between align-items-center">
+      <Card className="shadow-sm">
+        <Card.Header className="d-flex justify-content-between align-items-center bg-white border-bottom-0">
           <Button
             variant="light"
-            size="sm"
             onClick={() => onNavigate("home")}
             className="d-flex align-items-center gap-2"
           >
             <ArrowLeft size={16} /> Back
           </Button>
+          {saving && <Spinner animation="border" size="sm" />}
         </Card.Header>
 
-        <Card.Body>
-          <h2 className="text-center fw-bold text-capitalize">{exercise}</h2>
+        <Card.Body className="text-center">
+          {error && (
+            <Alert variant="danger" dismissible onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
 
-          <div className="text-center mt-3">
+          {showSuccess && (
+            <Alert variant="success" className="position-fixed top-0 start-50 translate-middle-x mt-3">
+              Progress saved!
+            </Alert>
+          )}
+
+          <div className="mb-4">
+            <h2 className="display-6 fw-bold text-capitalize mb-0 d-flex align-items-center justify-content-center gap-2">
+              {EXERCISE_EMOJI[exercise]} {exercise}
+              {isGoalAchieved && <Trophy className="text-warning" size={24} />}
+            </h2>
+          </div>
+
+          <div className="mb-4">
             <span className="display-4 fw-bold">{count}</span>
             <span className="h3 text-muted">/{goal}</span>
           </div>
 
-          <ProgressBar now={progressPercentage} className="mt-3" />
+          <ProgressBar
+            now={progressPercentage}
+            variant={isGoalAchieved ? "success" : undefined}
+            className="mb-4"
+            style={{ height: "1rem" }}
+          />
 
-          <div className="row mt-4">
-            {/* Single Reps */}
-            <div className="col-md-6 text-center">
-              <h6 className="fw-bold">Single Reps</h6>
-              <div className="d-flex gap-2 justify-content-center">
-                <Button
-                  onClick={() => handleCountChange(-1)}
-                  disabled={count === 0}
-                  variant="outline-primary"
-                >
-                  -1
-                </Button>
-                <Button
-                  onClick={() => handleCountChange(1)}
-                  disabled={count === goal}
-                  variant="outline-primary"
-                >
-                  +1
-                </Button>
+          <div className="row g-4">
+            {SET_SIZES.map((size) => (
+              <div key={size} className="col-6">
+                <Card className="h-100">
+                  <Card.Body>
+                    <h6 className="fw-bold mb-3">Sets of {size}</h6>
+                    <div className="d-flex gap-2 justify-content-center">
+                      <Button
+                        onClick={() => handleCountChange(-size)}
+                        disabled={count < size || saving}
+                        variant="outline-primary"
+                        className="d-flex align-items-center"
+                      >
+                        <ArrowDown size={16} />
+                        {size}
+                      </Button>
+                      <Button
+                        onClick={() => handleCountChange(size)}
+                        disabled={count > goal - size || saving}
+                        variant="outline-primary"
+                        className="d-flex align-items-center"
+                      >
+                        <ArrowUp size={16} />
+                        {size}
+                      </Button>
+                    </div>
+                  </Card.Body>
+                </Card>
               </div>
-            </div>
-
-            {/* Sets of 10 */}
-            <div className="col-md-6 text-center">
-              <h6 className="fw-bold">Sets of 10</h6>
-              <div className="d-flex gap-2 justify-content-center">
-                <Button
-                  onClick={() => handleCountChange(-10)}
-                  disabled={count < 10}
-                  variant="outline-primary"
-                >
-                  -10
-                </Button>
-                <Button
-                  onClick={() => handleCountChange(10)}
-                  disabled={count > goal - 10}
-                  variant="outline-primary"
-                >
-                  +10
-                </Button>
-              </div>
-            </div>
+            ))}
           </div>
         </Card.Body>
       </Card>

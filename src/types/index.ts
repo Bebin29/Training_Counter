@@ -22,7 +22,6 @@ export interface UserProfile {
   name: string;
   level: number;
   totalWorkouts: number;
-  stravaConnected: boolean;
 }
 
 export interface DailyProgress {
@@ -30,12 +29,10 @@ export interface DailyProgress {
   pushups: number;
   situps: number;
   squats: number;
-  running: number;
 }
 
 export interface DailyGoals {
   pushups: number;
   situps: number;
   squats: number;
-  running: number;
 }
